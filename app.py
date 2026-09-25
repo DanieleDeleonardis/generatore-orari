@@ -3,11 +3,9 @@ import pandas as pd
 import datetime
 import random
 import xlwt
-import json
+import base64
+import requests
 from io import BytesIO
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseUpload
 
 # --- INTERFACCIA UTENTE (APP) ---
 st.set_page_config(page_title="Generatore SIA", page_icon="📅")
@@ -134,28 +132,26 @@ if st.button("Genera File Excel", type="primary"):
             mime="application/vnd.ms-excel"
         )
 
-        # --- CARICAMENTO SU GOOGLE DRIVE ---
+        # --- CARICAMENTO SU GOOGLE DRIVE TRAMITE WEBHOOK ---
         if salva_su_drive:
             try:
-                # 1. Recupera le credenziali dai segreti di Streamlit
-                creds_dict = json.loads(st.secrets["GCP_CREDENTIALS"])
-                scopes = ['https://www.googleapis.com/auth/drive.file']
-                creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=scopes)
-                service = build('drive', 'v3', credentials=creds)
-
-                # 2. Riporta il cursore del file in memoria all'inizio prima di caricarlo
-                output.seek(0)
-
-                # 3. Imposta i metadata (Metti qui il tuo FOLDER_ID!!!)
-                file_metadata = {
-                    'name': nome_file,
-                    'parents': ['1rMuHo27iEoB1P7eab0MTLtARpzlOxrwP']  # <--- SOSTITUISCI QUESTO!
+                # 1. Convertiamo il file Excel in testo (Base64) per spedirlo
+                b64_data = base64.b64encode(xls_data).decode('utf-8')
+                
+                payload = {
+                    "fileName": nome_file,
+                    "mimeType": "application/vnd.ms-excel",
+                    "fileData": b64_data
                 }
                 
-                # 4. Invia a Google Drive
-                media = MediaIoBaseUpload(output, mimetype='application/vnd.ms-excel', resumable=True)
-                file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+                # 2. INCOLLA QUI L'URL DEL TUO SCRIPT GOOGLE!
+                webhook_url = "https://script.google.com/macros/s/AKfycbyRmUSCj6n14AhYUqPRMQet6KUkvnK9xQfuh4pcuWd-OUqkdCbQRB9JvHkXZ33zLiA/exec"
                 
-                st.success("✅ File caricato con successo sul tuo Google Drive!")
+                risposta = requests.post(webhook_url, data=payload)
+                
+                if "OK" in risposta.text:
+                    st.success("✅ File caricato con successo sul tuo Google Drive!")
+                else:
+                    st.error(f"Errore da Drive: {risposta.text}")
             except Exception as e:
-                st.error(f"Errore durante il caricamento su Google Drive: {e}")
+                st.error(f"Errore di invio al Webhook: {e}")
