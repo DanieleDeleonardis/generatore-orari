@@ -149,7 +149,7 @@ if st.button("Genera File Excel", type="primary"):
                 # 3. Imposta i metadata (Metti qui il tuo FOLDER_ID!!!)
                 file_metadata = {
                     'name': nome_file,
-                    'parents': ['1ESmvBRk0n14Ul23ECufmeoUfdX4SeeZj']  # <--- SOSTITUISCI QUESTO!
+                    'parents': ['1rMuHo27iEoB1P7eab0MTLtARpzlOxrwP']  # <--- SOSTITUISCI QUESTO!
                 }
                 
                 # 4. Invia a Google Drive
