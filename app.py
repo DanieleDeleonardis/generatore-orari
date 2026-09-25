@@ -2,11 +2,12 @@ import streamlit as st
 import pandas as pd
 import datetime
 import random
+import xlwt
 from io import BytesIO
 
 # --- INTERFACCIA UTENTE (APP) ---
 st.set_page_config(page_title="Generatore SIA", page_icon="📅")
-st.title("Generatore Orari SIA")
+st.title("Generatore Orari SIA (.xls)")
 
 st.markdown("Modifica i valori qui sotto se necessario, oppure lascia quelli di default e premi Genera.")
 
@@ -16,12 +17,12 @@ with st.expander("Dati Utente e Commessa", expanded=True):
     cod_commessa = st.text_input("Codice Commessa", value="TRASVCON01")
 
 with st.expander("Attività Principale (Giornata intera o 1° metà)"):
-    descrizione_1 = st.text_input("Descrizione", value="Creazione nuovo software - Test Funzionali")
-    cod_attivita_1 = st.text_input("Codice", value="200923")
+    descrizione_1 = st.text_input("Descrizione 1", value="Creazione nuovo software - Test Funzionali")
+    cod_attivita_1 = st.text_input("Codice 1", value="200923")
 
 with st.expander("Attività Secondaria (2° metà per giornate spezzate)"):
-    descrizione_2 = st.text_input("Descrizione", value="Supporto ai Clienti/Altri Settori - Altri Tipi di Supporto")
-    cod_attivita_2 = st.text_input("Codice", value="201078")
+    descrizione_2 = st.text_input("Descrizione 2", value="Supporto ai Clienti/Altri Settori - Altri Tipi di Supporto")
+    cod_attivita_2 = st.text_input("Codice 2", value="201078")
 
 # --- LOGICA DI GENERAZIONE ---
 if st.button("Genera File Excel", type="primary"):
@@ -71,22 +72,39 @@ if st.button("Genera File Excel", type="primary"):
     ]
     df = df[colonne_ordinate]
 
-    # Prepara il file per il download
+    # --- CREAZIONE DEL FILE .XLS IN MEMORIA CON XLWT ---
     output = BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Orari')
-    excel_data = output.getvalue()
+    workbook = xlwt.Workbook()
+    sheet = workbook.add_sheet('Sheet1')
+    
+    # Scrivi le intestazioni di colonna
+    for col_idx, column_name in enumerate(df.columns):
+        sheet.write(0, col_idx, column_name)
+    
+    # Scrivi i dati
+    for row_idx, row in enumerate(df.values):
+        for col_idx, value in enumerate(row):
+             if pd.isna(value):
+                 sheet.write(row_idx + 1, col_idx, "")
+             else:
+                 sheet.write(row_idx + 1, col_idx, value)
+    
+    # Salva il file nel buffer in memoria
+    workbook.save(output)
+    xls_data = output.getvalue()
 
     str_inizio = start_date.strftime("%Y%m%d")
     str_fine = end_date.strftime("%Y%m%d")
-    nome_file = f"SIA_ATTIVITA_{str_inizio}_al_{str_fine}.xlsx"
+    # Estensione corretta a .xls
+    nome_file = f"SIA_ATTIVITA_{str_inizio}_al_{str_fine}.xls"
 
     st.success("File generato con successo!")
     
-    # Pulsante per scaricare il file sul telefono o PC
+    # --- DOWNLOAD BUTTON AGGIORNATO ---
     st.download_button(
-        label="📥 Scarica File Excel",
-        data=excel_data,
+        label="📥 Scarica File Excel (.xls)",
+        data=xls_data,
         file_name=nome_file,
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        # Tipo MIME corretto per i vecchi file xls
+        mime="application/vnd.ms-excel"
     )
