@@ -13,7 +13,6 @@ st.markdown("Seleziona il periodo desiderato, modifica i valori se necessario e 
 
 # --- SCELTA DATE CON CALENDARIO ---
 oggi = datetime.date.today()
-# Di default propone la settimana corrente (dal lunedì a oggi)
 default_start = oggi - datetime.timedelta(days=oggi.weekday())
 
 col1, col2 = st.columns(2)
@@ -22,8 +21,7 @@ with col1:
 with col2:
     end_date = st.date_input("Data di fine", value=oggi)
 
-# --- CAMPI DI INPUT CON PLACEHOLDER ---
-# Ho impostato expanded=False per tenere chiuse queste tendine di default e rendere l'app più pulita
+# --- CAMPI DI INPUT ---
 with st.expander("Dati Utente e Commessa", expanded=False):
     cod_addetto = st.text_input("Codice Addetto", value="115")
     cod_commessa = st.text_input("Codice Commessa", value="TRASVCON01")
@@ -39,7 +37,6 @@ with st.expander("Attività Secondaria (2° metà per giornate spezzate)", expan
 # --- LOGICA DI GENERAZIONE ---
 if st.button("Genera File Excel", type="primary"):
     
-    # Controllo di sicurezza sulle date
     if start_date > end_date:
         st.error("Errore: La data di inizio non può essere successiva alla data di fine!")
     else:
@@ -56,11 +53,10 @@ if st.button("Genera File Excel", type="primary"):
         giorni_spezzati = []
         settimane = {}
         
-        # Raggruppa i giorni candidati (Lun, Mar, Gio, Ven) per settimana
+        # Ora tutti i giorni feriali (0, 1, 2, 3, 4) sono candidati per essere spezzati
         temp_date = start_date
         while temp_date <= end_date:
-            if temp_date.weekday() in [0, 1, 3, 4]:
-                # Ottiene l'anno e il numero della settimana
+            if temp_date.weekday() < 5: 
                 anno_iso, sett_iso, _ = temp_date.isocalendar()
                 chiave_settimana = (anno_iso, sett_iso)
                 
@@ -69,7 +65,7 @@ if st.button("Genera File Excel", type="primary"):
                 settimane[chiave_settimana].append(temp_date)
             temp_date += datetime.timedelta(days=1)
 
-        # Per OGNI settimana trovata nel range, pesca 2 giorni a caso da spezzare
+        # Sceglie 2 giorni a caso per ogni settimana inclusa nel periodo
         for giorni_della_settimana in settimane.values():
             num_da_spezzare = min(2, len(giorni_della_settimana))
             giorni_spezzati.extend(random.sample(giorni_della_settimana, num_da_spezzare))
@@ -81,11 +77,20 @@ if st.button("Genera File Excel", type="primary"):
         while current_date <= end_date:
             if current_date.weekday() < 5:  
                 if current_date in giorni_spezzati:
-                    record1 = {**valori_default, "Data": current_date.strftime("%d/%m/%Y"), "Durata": "04:00", "Cod_Attività": int(cod_attivita_1), "Descrizione": descrizione_1}
-                    record2 = {**valori_default, "Data": current_date.strftime("%d/%m/%Y"), "Durata": "04:00", "Cod_Attività": int(cod_attivita_2), "Descrizione": descrizione_2}
+                    # Se è Mercoledì (2) divide 4 e 4, altrimenti 4 e 3:30
+                    if current_date.weekday() == 2:
+                        durata_1 = "04:00"
+                        durata_2 = "04:00"
+                    else:
+                        durata_1 = "04:00"
+                        durata_2 = "03:30"
+
+                    record1 = {**valori_default, "Data": current_date.strftime("%d/%m/%Y"), "Durata": durata_1, "Cod_Attività": int(cod_attivita_1), "Descrizione": descrizione_1}
+                    record2 = {**valori_default, "Data": current_date.strftime("%d/%m/%Y"), "Durata": durata_2, "Cod_Attività": int(cod_attivita_2), "Descrizione": descrizione_2}
                     records.extend([record1, record2])
                 else:
-                    durata = "07:30" if current_date.weekday() == 2 else "08:00"
+                    # Giornata non spezzata: Mercoledì 08:00, altri giorni 07:30
+                    durata = "08:00" if current_date.weekday() == 2 else "07:30"
                     record = {**valori_default, "Data": current_date.strftime("%d/%m/%Y"), "Durata": durata, "Cod_Attività": int(cod_attivita_1), "Descrizione": descrizione_1}
                     records.append(record)
             current_date += datetime.timedelta(days=1)
