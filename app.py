@@ -3,7 +3,11 @@ import pandas as pd
 import datetime
 import random
 import xlwt
+import json
 from io import BytesIO
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
 
 # --- INTERFACCIA UTENTE (APP) ---
 st.set_page_config(page_title="Generatore SIA", page_icon="📅")
@@ -34,6 +38,9 @@ with st.expander("Attività Secondaria (2° metà per giornate spezzate)", expan
     descrizione_2 = st.text_input("Descrizione 2", value="Supporto ai Clienti/Altri Settori - Altri Tipi di Supporto")
     cod_attivita_2 = st.text_input("Codice 2", value="201078")
 
+# OPZIONE DRIVE
+salva_su_drive = st.checkbox("☁️ Salva direttamente su Google Drive", value=True)
+
 # --- LOGICA DI GENERAZIONE ---
 if st.button("Genera File Excel", type="primary"):
     
@@ -49,11 +56,10 @@ if st.button("Genera File Excel", type="primary"):
             "Issue": ""
         }
 
-        # --- LOGICA GIORNI SPEZZATI (PER SETTIMANA) ---
+        # --- LOGICA GIORNI SPEZZATI ---
         giorni_spezzati = []
         settimane = {}
         
-        # Ora tutti i giorni feriali (0, 1, 2, 3, 4) sono candidati per essere spezzati
         temp_date = start_date
         while temp_date <= end_date:
             if temp_date.weekday() < 5: 
@@ -65,7 +71,6 @@ if st.button("Genera File Excel", type="primary"):
                 settimane[chiave_settimana].append(temp_date)
             temp_date += datetime.timedelta(days=1)
 
-        # Sceglie 2 giorni a caso per ogni settimana inclusa nel periodo
         for giorni_della_settimana in settimane.values():
             num_da_spezzare = min(2, len(giorni_della_settimana))
             giorni_spezzati.extend(random.sample(giorni_della_settimana, num_da_spezzare))
@@ -77,19 +82,15 @@ if st.button("Genera File Excel", type="primary"):
         while current_date <= end_date:
             if current_date.weekday() < 5:  
                 if current_date in giorni_spezzati:
-                    # Se è Mercoledì (2) divide 4 e 4, altrimenti 4 e 3:30
                     if current_date.weekday() == 2:
-                        durata_1 = "04:00"
-                        durata_2 = "04:00"
+                        durata_1, durata_2 = "04:00", "04:00"
                     else:
-                        durata_1 = "04:00"
-                        durata_2 = "03:30"
+                        durata_1, durata_2 = "04:00", "03:30"
 
                     record1 = {**valori_default, "Data": current_date.strftime("%d/%m/%Y"), "Durata": durata_1, "Cod_Attività": int(cod_attivita_1), "Descrizione": descrizione_1}
                     record2 = {**valori_default, "Data": current_date.strftime("%d/%m/%Y"), "Durata": durata_2, "Cod_Attività": int(cod_attivita_2), "Descrizione": descrizione_2}
                     records.extend([record1, record2])
                 else:
-                    # Giornata non spezzata: Mercoledì 08:00, altri giorni 07:30
                     durata = "08:00" if current_date.weekday() == 2 else "07:30"
                     record = {**valori_default, "Data": current_date.strftime("%d/%m/%Y"), "Durata": durata, "Cod_Attività": int(cod_attivita_1), "Descrizione": descrizione_1}
                     records.append(record)
@@ -102,7 +103,7 @@ if st.button("Genera File Excel", type="primary"):
         ]
         df = df[colonne_ordinate]
 
-        # --- CREAZIONE DEL FILE .XLS IN MEMORIA CON XLWT ---
+        # --- CREAZIONE DEL FILE IN MEMORIA ---
         output = BytesIO()
         workbook = xlwt.Workbook()
         sheet = workbook.add_sheet('Sheet1')
@@ -127,8 +128,34 @@ if st.button("Genera File Excel", type="primary"):
         st.success(f"File generato con successo! ({len(df)} righe totali create)")
         
         st.download_button(
-            label="📥 Scarica File Excel (.xls)",
+            label="📥 Scarica File Excel (.xls) sul telefono",
             data=xls_data,
             file_name=nome_file,
             mime="application/vnd.ms-excel"
         )
+
+        # --- CARICAMENTO SU GOOGLE DRIVE ---
+        if salva_su_drive:
+            try:
+                # 1. Recupera le credenziali dai segreti di Streamlit
+                creds_dict = json.loads(st.secrets["GCP_CREDENTIALS"])
+                scopes = ['https://www.googleapis.com/auth/drive.file']
+                creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=scopes)
+                service = build('drive', 'v3', credentials=creds)
+
+                # 2. Riporta il cursore del file in memoria all'inizio prima di caricarlo
+                output.seek(0)
+
+                # 3. Imposta i metadata (Metti qui il tuo FOLDER_ID!!!)
+                file_metadata = {
+                    'name': nome_file,
+                    'parents': ['1ESmvBRk0n14Ul23ECufmeoUfdX4SeeZj']  # <--- SOSTITUISCI QUESTO!
+                }
+                
+                # 4. Invia a Google Drive
+                media = MediaIoBaseUpload(output, mimetype='application/vnd.ms-excel', resumable=True)
+                file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+                
+                st.success("✅ File caricato con successo sul tuo Google Drive!")
+            except Exception as e:
+                st.error(f"Errore durante il caricamento su Google Drive: {e}")
