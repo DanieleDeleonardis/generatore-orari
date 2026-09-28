@@ -26,11 +26,19 @@ with col2:
 # --- CAMPI DI INPUT ---
 with st.expander("Dati Utente e Commessa", expanded=False):
     cod_addetto = st.text_input("Codice Addetto", value="115")
-    cod_commessa = st.text_input("Codice Commessa", value="TRASVCON01")
+    # Trasformato in menu a tendina con le due opzioni
+    cod_commessa = st.selectbox("Codice Commessa", options=["TRASVCON01", "SEGRCON01"])
+    # Nuova colonna Tipologia con valore di default 113
+    cod_tipologia = st.text_input("Codice Tipologia", value="113")
 
 with st.expander("Attività Principale (Giornata intera o 1° metà)", expanded=False):
-    descrizione_1 = st.text_input("Descrizione 1", value="Creazione nuovo software - Test Funzionali")
-    cod_attivita_1 = st.text_input("Codice 1", value="200923")
+    # Trasformato in menu a tendina
+    descrizione_1 = st.selectbox("Descrizione 1", options=[
+        "Creazione nuovo software - Test Funzionali",
+        "Convertitore Atti e Protocollo, configurazione ws, assistenza ws, sviluppo"
+    ])
+    # Trasformato in menu a tendina
+    cod_attivita_1 = st.selectbox("Codice 1", options=["200923", "200864"])
 
 with st.expander("Attività Secondaria (2° metà per giornate spezzate)", expanded=False):
     descrizione_2 = st.text_input("Descrizione 2", value="Supporto ai Clienti/Altri Settori - Altri Tipi di Supporto")
@@ -48,13 +56,13 @@ if st.button("Genera File Excel", type="primary"):
         valori_default = {
             "Cod_Addetto": int(cod_addetto),
             "Cod_Commessa": cod_commessa,
-            "Cod_Tipologia": "",
+            "Cod_Tipologia": cod_tipologia, # Ora pesca il valore dal nuovo campo
             "Cod_SubTipologia": "",
             "Chiamata": "",
             "Issue": ""
         }
 
-        # --- LOGICA GIORNI SPEZZATI ---
+        # --- LOGICA GIORNI SPEZZATI (PER SETTIMANA) ---
         giorni_spezzati = []
         settimane = {}
         
@@ -101,7 +109,7 @@ if st.button("Genera File Excel", type="primary"):
         ]
         df = df[colonne_ordinate]
 
-        # --- CREAZIONE DEL FILE IN MEMORIA ---
+        # --- CREAZIONE DEL FILE .XLS IN MEMORIA CON XLWT ---
         output = BytesIO()
         workbook = xlwt.Workbook()
         sheet = workbook.add_sheet('Sheet1')
@@ -135,7 +143,6 @@ if st.button("Genera File Excel", type="primary"):
         # --- CARICAMENTO SU GOOGLE DRIVE TRAMITE WEBHOOK ---
         if salva_su_drive:
             try:
-                # 1. Convertiamo il file Excel in testo (Base64) per spedirlo
                 b64_data = base64.b64encode(xls_data).decode('utf-8')
                 
                 payload = {
@@ -144,8 +151,8 @@ if st.button("Genera File Excel", type="primary"):
                     "fileData": b64_data
                 }
                 
-                # 2. INCOLLA QUI L'URL DEL TUO SCRIPT GOOGLE!
-                webhook_url = "https://script.google.com/macros/s/AKfycbyRmUSCj6n14AhYUqPRMQet6KUkvnK9xQfuh4pcuWd-OUqkdCbQRB9JvHkXZ33zLiA/exec"
+                # INCOLLA QUI L'URL DEL TUO SCRIPT GOOGLE!
+                webhook_url = "INCOLLA_QUI_IL_TUO_URL_DI_APP_SCRIPT"
                 
                 risposta = requests.post(webhook_url, data=payload)
                 
